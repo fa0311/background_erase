@@ -71,7 +71,7 @@ class ImageViewer:
 
         self.background_view_toggle = tk.Button(
             self.top_frame,
-            text="Bg",
+            text="Background",
             command=lambda: self.set_background_view(),
         )
         self.background_view_toggle.pack(side=tk.LEFT, padx=5, pady=5)
