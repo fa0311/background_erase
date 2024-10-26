@@ -12,8 +12,9 @@ from rembg import remove
 
 class Mode:
     View: int = 0
-    RemBg: int = 1
-    UndoBg: int = 2
+    Eraser: int = 1
+    RemBg: int = 2
+    UndoBg: int = 3
 
 
 class ImageViewer:
@@ -37,12 +38,27 @@ class ImageViewer:
             command=self.previous_image,
         )
         self.prev_button.pack(side=tk.LEFT, padx=5, pady=5)
+
         self.next_button = tk.Button(
             self.top_frame,
             text="Next",
             command=self.next_image,
         )
         self.next_button.pack(side=tk.LEFT, padx=5, pady=5)
+
+        self.include_button = tk.Button(
+            self.top_frame,
+            text="Include",
+            command=lambda: self.include_image(),
+        )
+        self.include_button.pack(side=tk.LEFT, padx=5, pady=5)
+
+        self.exclude_button = tk.Button(
+            self.top_frame,
+            text="Exclude",
+            command=lambda: self.exclude_image(),
+        )
+        self.exclude_button.pack(side=tk.LEFT, padx=5, pady=5)
 
         self.embed_pygame = tk.Frame(
             self.root,
@@ -80,7 +96,9 @@ class ImageViewer:
         )
         self.undobg_button.pack(side=tk.LEFT, padx=5, pady=5)
 
-        self.image_files = self.select_folder()
+        os.makedirs("include", exist_ok=True)
+        os.makedirs("exclude", exist_ok=True)
+        self.image_files, self.output_dir = self.select_folder()
 
         self.current_image = 0
         self.load_image(self.image_files[self.current_image % len(self.image_files)])
@@ -88,15 +106,21 @@ class ImageViewer:
         self.draw_box = False
         self.clock = pygame.time.Clock()
 
-    def select_folder(self) -> List[str]:
+    def select_folder(self) -> tuple[List[str], List[str]]:
         folder_path = filedialog.askdirectory(title="Select a folder")
-        if folder_path:
-            return [
+        return (
+            [
                 os.path.join(folder_path, f)
                 for f in os.listdir(folder_path)
+                if os.path.isfile(os.path.join(folder_path, f))
                 if f.lower().endswith((".png", ".jpg", ".jpeg", ".bmp", ".gif"))
-            ]
-        return []
+            ],
+            [
+                os.path.join(folder_path, f)
+                for f in os.listdir(folder_path)
+                if os.path.isdir(os.path.join(folder_path, f))
+            ],
+        )
 
     def start_drag(self, event: pygame.event.Event, box: bool = False) -> None:
         """ドラッグの開始位置を記録"""
@@ -136,23 +160,28 @@ class ImageViewer:
     def trim(
         self, value: MatLike, pos1: Tuple[int, int], pos2: Tuple[int, int]
     ) -> MatLike:
-        data = np.zeros_like(value)
-        data[
-            min(pos1[1], pos2[1]) : max(pos1[1], pos2[1]),
-            min(pos1[0], pos2[0]) : max(pos1[0], pos2[0]),
-        ] = value[
-            min(pos1[1], pos2[1]) : max(pos1[1], pos2[1]),
-            min(pos1[0], pos2[0]) : max(pos1[0], pos2[0]),
-        ]
+        x1, x2 = sorted([pos1[0], pos2[0]])
+        y1, y2 = sorted([pos1[1], pos2[1]])
+        return value[y1:y2, x1:x2]
+
+    def trim_back(
+        self, value: MatLike, pos1: Tuple[int, int], pos2: Tuple[int, int]
+    ) -> MatLike:
+        x1, x2 = sorted([pos1[0], pos2[0]])
+        y1, y2 = sorted([pos1[1], pos2[1]])
+        data = np.zeros_like(self.cv_image_base)
+        data[y1:y2, x1:x2] = value
         return data
 
     def remove_bg(self, event: pygame.event.Event) -> None:
         """背景を除去"""
         pos1 = self.get_image_pos(event.pos)
         pos2 = self.get_image_pos(self.drag_start)
-        data = self.trim(self.cv_image, pos1, pos2)
-        mask = remove(data)[:, :, 3] < 150  # type: ignore
-        self.cv_image[mask] = np.zeros_like(self.cv_image)[mask]
+        trimed = self.trim(self.cv_image, pos1, pos2)
+        mask = remove(trimed)[:, :, 3] >= 150  # type: ignore
+        data = np.zeros_like(trimed)
+        data[mask] = trimed[mask]
+        self.cv_image = self.trim_back(data, pos1, pos2)
         self.render_image()
         self.render_scaled()
 
@@ -160,8 +189,11 @@ class ImageViewer:
         """背景除去を取り消す"""
         pos1 = self.get_image_pos(event.pos)
         pos2 = self.get_image_pos(self.drag_start)
-        data = self.trim(self.cv_image_base, pos1, pos2)
-        mask = remove(data)[:, :, 3] >= 150  # type: ignore
+        trimed = self.trim(self.cv_image_base, pos1, pos2)
+        mask = remove(trimed)[:, :, 3] >= 150  # type: ignore
+        data = np.zeros_like(trimed)
+        data[mask] = trimed[mask]
+        mask = self.trim_back(data, pos1, pos2) > 0
         self.cv_image[mask] = self.cv_image_base[mask]
         self.render_image()
         self.render_scaled()
@@ -181,6 +213,30 @@ class ImageViewer:
         self.index_label.config(
             text=f"Index: {self.current_image + 1}/{len(self.image_files)}"
         )
+
+    def include_image(self) -> None:
+        """画像を含める"""
+        self.image_dump("include", ["exclude"])
+        self.next_image()
+
+    def exclude_image(self) -> None:
+        """画像を除外"""
+        self.image_dump("exclude", ["include"])
+        self.next_image()
+
+    def image_dump(self, output: str, remove_path: list[str]) -> None:
+        image_path = self.image_files[self.current_image % len(self.image_files)]
+        image_name, image_ext = os.path.splitext(os.path.basename(image_path))
+
+        output_dir = os.path.join(os.path.dirname(image_path), output)
+        os.makedirs(output_dir, exist_ok=True)
+        cv2.imwrite(os.path.join(output_dir, f"{image_name}.png"), self.cv_image)
+
+        for re in remove_path:
+            remove_dir = os.path.join(os.path.dirname(image_path), re)
+            remove_image = os.path.join(remove_dir, f"{image_name}.png")
+            if os.path.exists(remove_image):
+                os.remove(remove_image)
 
     def render_box(self, pos1: Tuple[int, int], pos2: Tuple[int, int]) -> None:
         surface = pygame.Surface((abs(pos1[0] - pos2[0]), abs(pos1[1] - pos2[1])))
@@ -209,8 +265,20 @@ class ImageViewer:
 
     def load_image(self, image_path: str) -> None:
         """Load and convert image to pygame surface"""
-        self.cv_image = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
-        self.cv_image_base = self.cv_image.copy()
+        image_name, image_ext = os.path.splitext(os.path.basename(image_path))
+        self.cv_image_base = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
+        if self.cv_image_base.shape[2] == 3:
+            self.cv_image_base = cv2.cvtColor(self.cv_image_base, cv2.COLOR_BGR2BGRA)
+
+        for output in self.output_dir:
+            path = os.path.join(output, f"{image_name}.png")
+            if os.path.exists(path):
+                self.cv_image = cv2.imread(path, cv2.IMREAD_UNCHANGED)
+                if self.cv_image.shape[2] == 3:
+                    self.cv_image = cv2.cvtColor(self.cv_image, cv2.COLOR_BGR2BGRA)
+                break
+        else:
+            self.cv_image = self.cv_image_base.copy()
         self.fit_to_screen()
 
     def fit_to_screen(self) -> None:
@@ -229,7 +297,7 @@ class ImageViewer:
     def render_image(self) -> None:
         """Render cv image to pygame surface"""
         self.image = pygame.surfarray.make_surface(
-            cv2.cvtColor(self.cv_image, cv2.COLOR_BGR2RGB).swapaxes(0, 1)
+            cv2.cvtColor(self.cv_image, cv2.COLOR_BGRA2RGB).swapaxes(0, 1)
         )
 
     def render_scaled(self) -> None:
