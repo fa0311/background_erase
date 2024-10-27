@@ -55,6 +55,13 @@ class ImageViewer:
         )
         self.reload_button.pack(side=tk.LEFT, padx=5, pady=5)
 
+        self.clear_button = tk.Button(
+            self.top_frame,
+            text="Clear",
+            command=lambda: self.clear_image(),
+        )
+        self.clear_button.pack(side=tk.LEFT, padx=5, pady=5)
+
         self.include_button = tk.Button(
             self.top_frame,
             text="Include",
@@ -132,7 +139,7 @@ class ImageViewer:
         )
         self.undobg_button.pack(side=tk.LEFT, padx=5, pady=5)
 
-        self.image_files, self.output_dir = self.select_folder()
+        self.image_files = self.select_folder()
         if not self.image_files:
             raise ValueError("No image files found in the selected folder")
 
@@ -150,22 +157,16 @@ class ImageViewer:
         self.selected_pre = []
         self.clock = pygame.time.Clock()
 
-    def select_folder(self) -> Tuple[List[str], List[str]]:
-        folder_path = filedialog.askdirectory(title="Select a folder")
-        os.makedirs(os.path.join(folder_path, "include"), exist_ok=True)
-        os.makedirs(os.path.join(folder_path, "exclude"), exist_ok=True)
-        return (
-            [
-                os.path.join(folder_path, f)
-                for f in os.listdir(folder_path)
-                if os.path.isfile(os.path.join(folder_path, f))
-                if f.lower().endswith((".png", ".jpg", ".jpeg", ".bmp", ".gif"))
-            ],
-            [
-                os.path.join(folder_path, "include"),
-                os.path.join(folder_path, "exclude"),
-            ],
-        )
+    def select_folder(self) -> List[str]:
+        self.folder_path = filedialog.askdirectory(title="Select a folder")
+        os.makedirs(os.path.join(self.folder_path, "include"), exist_ok=True)
+        os.makedirs(os.path.join(self.folder_path, "exclude"), exist_ok=True)
+        return [
+            os.path.join(self.folder_path, f)
+            for f in os.listdir(self.folder_path)
+            if os.path.isfile(os.path.join(self.folder_path, f))
+            if f.lower().endswith((".png", ".jpg", ".jpeg", ".bmp", ".gif"))
+        ]
 
     def drag_image(self, event: pygame.event.Event) -> None:
         self.image_rect.topleft = (
@@ -240,7 +241,7 @@ class ImageViewer:
     def add_border(self, value: MatLike) -> MatLike:
         x, y, w, h = cv2.boundingRect(cv2.cvtColor(value, cv2.COLOR_BGRA2GRAY))
         if self.scale <= 1.5:
-            thickness = self.cv_image.shape[0] // 1000
+            thickness = self.cv_image.shape[0] // 500
         else:
             thickness = 1
         value = cv2.rectangle(value, (x, y), (x + w, y + h), (255, 0, 0, 255), thickness)
@@ -252,7 +253,7 @@ class ImageViewer:
         gray[musk] = 255
         contours, _ = cv2.findContours(gray, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
         if self.scale <= 1.5:
-            thickness = self.cv_image.shape[0] // 1000
+            thickness = self.cv_image.shape[0] // 500
         else:
             thickness = 1
         value = cv2.drawContours(value, contours, -1, (0, 255, 0, 255), thickness)
@@ -271,13 +272,20 @@ class ImageViewer:
     def update_index_label(self) -> None:
         self.index_label.config(text=f"Index: {self.current_image + 1}/{len(self.image_files)}")
 
+    def clear_image(self) -> None:
+        self.cv_image = self.cv_image_base.copy()
+        self.render_image()
+        self.render_scaled()
+
     def include_image(self) -> None:
         self.image_dump("include", ["exclude"])
-        self.next_image()
+        self.include_button.config(text="Include*")
+        self.exclude_button.config(text="Exclude")
 
     def exclude_image(self) -> None:
         self.image_dump("exclude", ["include"])
-        self.next_image()
+        self.include_button.config(text="Include")
+        self.exclude_button.config(text="Exclude*")
 
     def set_background_view(self) -> None:
         if self.background_view:
@@ -300,6 +308,7 @@ class ImageViewer:
             self.render_scaled()
             self.next_frame()
             self.include_image()
+            self.next_image()
         self.auto_button.config(relief=tk.RAISED)
 
     def image_dump(self, output: str, remove_path: list[str]) -> None:
@@ -336,9 +345,9 @@ class ImageViewer:
         while True:
             self.handle_events()
             self.next_frame()
-            fps = self.clock.get_fps()
-            self.fps_label.config(text=f"FPS: {fps:.2f}")
-            self.clock.tick(60)
+            fps = f"{self.clock.get_fps():.2f}".rjust(5)
+            self.fps_label.config(text=f"FPS: {fps}")
+            self.clock.tick(120)
 
     def next_frame(self) -> None:
         self.screen.fill((30, 30, 30))
@@ -357,13 +366,20 @@ class ImageViewer:
         self.cv_image_base = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
         if self.cv_image_base.shape[2] == 3:
             self.cv_image_base = cv2.cvtColor(self.cv_image_base, cv2.COLOR_BGR2BGRA)
+        files = [
+            (self.include_button, "Include"),
+            (self.exclude_button, "Exclude"),
+        ]
+        for button, output in files:
+            button.config(text=output)
 
-        for output in self.output_dir:
-            path = os.path.join(output, f"{image_name}.png")
+        for button, output in files:
+            path = os.path.join(os.path.dirname(image_path), output.lower(), f"{image_name}.png")
             if os.path.exists(path):
                 self.cv_image = cv2.imread(path, cv2.IMREAD_UNCHANGED)
                 if self.cv_image.shape[2] == 3:
                     self.cv_image = cv2.cvtColor(self.cv_image, cv2.COLOR_BGR2BGRA)
+                button.config(text=f"{output}*")
                 break
         else:
             self.cv_image = self.cv_image_base.copy()
