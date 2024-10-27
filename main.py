@@ -190,7 +190,7 @@ class ImageViewer:
         new_width = int(self.image.get_width() * scale_new)
         new_height = int(self.image.get_height() * scale_new)
         self.image_rect.size = (new_width, new_height)
-        if (self.scale <= 1.5) != (scale_new <= 1.5):
+        if (self.scale <= 1) != (scale_new <= 1):
             self.scale = scale_new
             self.render_image()
             self.render_scaled()
@@ -243,8 +243,8 @@ class ImageViewer:
 
     def add_border(self, value: MatLike) -> MatLike:
         x, y, w, h = cv2.boundingRect(cv2.cvtColor(value, cv2.COLOR_BGRA2GRAY))
-        if self.scale <= 1.5:
-            thickness = self.cv_image.shape[0] // 500
+        if self.scale <= 1:
+            thickness = int(max(2 / self.fit_scale, 1))
         else:
             thickness = 1
         value = cv2.rectangle(value, (x, y), (x + w, y + h), (255, 0, 0, 255), thickness)
@@ -255,8 +255,8 @@ class ImageViewer:
         musk = value[:, :, 3] > 0
         gray[musk] = 255
         contours, _ = cv2.findContours(gray, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
-        if self.scale <= 1.5:
-            thickness = self.cv_image.shape[0] // 500
+        if self.scale <= 1:
+            thickness = int(max(2 / self.fit_scale, 1))
         else:
             thickness = 1
         value = cv2.drawContours(value, contours, -1, (0, 255, 0, 255), thickness)
@@ -302,17 +302,18 @@ class ImageViewer:
 
     def auto(self) -> None:
         self.fps_label.config(text="Processing Auto")
-        self.auto_button.config(relief=tk.SUNKEN)
-        for _ in tqdm(self.image_files[self.current_image :]):
-            mask = remove(self.cv_image_base, session=self.rembg_session)[:, :, 3] >= 150  # type: ignore
-            self.cv_image = np.zeros_like(self.cv_image)
-            self.cv_image[mask] = self.cv_image_base[mask]
-            self.render_image()
-            self.render_scaled()
-            self.next_frame()
-            self.include_image()
-            self.next_image()
-        self.auto_button.config(relief=tk.RAISED)
+        if self.auto_button.cget("relief") == tk.RAISED:
+            self.auto_button.config(relief=tk.SUNKEN)
+            for _ in tqdm(self.image_files[self.current_image :]):
+                mask = remove(self.cv_image_base, session=self.rembg_session)[:, :, 3] >= 150  # type: ignore
+                self.cv_image = np.zeros_like(self.cv_image)
+                self.cv_image[mask] = self.cv_image_base[mask]
+                self.render_image()
+                self.render_scaled()
+                self.next_frame()
+                self.include_image()
+                self.next_image()
+            self.auto_button.config(relief=tk.RAISED)
 
     def image_dump(self, output: str, remove_path: list[str]) -> None:
         image_path = self.image_files[self.current_image % len(self.image_files)]
@@ -392,12 +393,12 @@ class ImageViewer:
 
     def fit_to_screen(self) -> None:
         screen_w, screen_h = self.screen_size
-        self.scale = 1.0
+        img_w, img_h = self.cv_image.shape[1], self.cv_image.shape[0]
+        self.fit_scale = min(screen_w / img_w, screen_h / img_h)
+        self.scale = self.fit_scale
         self.render_image()
         self.image_rect = self.image.get_rect()
-        self.old_size = self.image_rect.size
-        img_w, img_h = self.image_rect.size
-        self.scale = min(screen_w / img_w, screen_h / img_h)
+
         self.image_rect.width = int(img_w * self.scale)
         self.image_rect.height = int(img_h * self.scale)
         self.image_rect.center = (screen_w // 2, screen_h // 2)
