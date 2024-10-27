@@ -349,8 +349,7 @@ class ImageViewer:
             while True:
                 self.handle_events()
                 self.next_frame()
-                fps = f"{self.clock.get_fps():.2f}".rjust(5)
-                self.fps_label.config(text=f"FPS: {fps}")
+                self.fps_label.config(text=f"FPS: {self.clock.get_fps():.2f}")
                 self.clock.tick(120)
         except Exception as e:
             print(e)
