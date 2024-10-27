@@ -33,7 +33,7 @@ class ImageViewer:
 
         self.top_frame = tk.Frame(self.root)
         self.top_frame.pack(side=tk.TOP)
-        self.fps_label = tk.Label(self.top_frame, text="FPS: 0")
+        self.fps_label = tk.Label(self.top_frame, text="FPS: 0", width=8)
         self.fps_label.pack(side=tk.LEFT, padx=5, pady=5)
         self.index_label = tk.Label(self.top_frame, text="Index: undefined")
         self.index_label.pack(side=tk.LEFT, padx=5, pady=5)
