@@ -7,7 +7,8 @@ import cv2
 import numpy as np
 import pygame
 from cv2.typing import MatLike
-from rembg import remove
+from rembg import new_session, remove
+from rembg.sessions.base import BaseSession
 from tqdm import tqdm
 
 
@@ -20,9 +21,11 @@ class Mode:
 
 
 class ImageViewer:
-    def __init__(self, root: tk.Tk, screen_size: Tuple[int, int]) -> None:
+    def __init__(self, root: tk.Tk, screen_size: Tuple[int, int], rembg_session: BaseSession) -> None:
         self.root = root
         self.screen_size = screen_size
+        self.rembg_session = rembg_session
+
         self.cv_image: MatLike
         self.cv_image_base: MatLike
         self.selected_mask: MatLike
@@ -230,7 +233,7 @@ class ImageViewer:
         pos2 = self.get_image_pos(self.drag_start)
         trimed = self.trim(self.cv_image_base, pos1, pos2)
         if trimed.shape[0] > 0 and trimed.shape[1] > 0:
-            mask = remove(trimed)[:, :, 3] >= 150  # type: ignore
+            mask = remove(trimed, session=self.rembg_session)[:, :, 3] >= 150  # type: ignore
             data = np.zeros_like(trimed)
             data[mask] = trimed[mask]
             mask = self.trim_back(data, pos1, pos2) > 0
@@ -301,7 +304,7 @@ class ImageViewer:
         self.fps_label.config(text="Processing Auto")
         self.auto_button.config(relief=tk.SUNKEN)
         for _ in tqdm(self.image_files[self.current_image :]):
-            mask = remove(self.cv_image_base)[:, :, 3] >= 150  # type: ignore
+            mask = remove(self.cv_image_base, session=self.rembg_session)[:, :, 3] >= 150  # type: ignore
             self.cv_image = np.zeros_like(self.cv_image)
             self.cv_image[mask] = self.cv_image_base[mask]
             self.render_image()
@@ -342,12 +345,15 @@ class ImageViewer:
         return int(10 / self.scale)
 
     def pygame_loop(self) -> None:
-        while True:
-            self.handle_events()
-            self.next_frame()
-            fps = f"{self.clock.get_fps():.2f}".rjust(5)
-            self.fps_label.config(text=f"FPS: {fps}")
-            self.clock.tick(120)
+        try:
+            while True:
+                self.handle_events()
+                self.next_frame()
+                fps = f"{self.clock.get_fps():.2f}".rjust(5)
+                self.fps_label.config(text=f"FPS: {fps}")
+                self.clock.tick(120)
+        except Exception as e:
+            print(e)
 
     def next_frame(self) -> None:
         self.screen.fill((30, 30, 30))
@@ -514,6 +520,7 @@ class ImageViewer:
 
 
 if __name__ == "__main__":
+    rembg_session = new_session()
     root = tk.Tk()
-    viewer = ImageViewer(root, screen_size=(800, 600))
+    viewer = ImageViewer(root, screen_size=(800, 600), rembg_session=rembg_session)
     viewer.pygame_loop()
