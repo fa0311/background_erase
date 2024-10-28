@@ -1,6 +1,7 @@
 import os
 import tkinter as tk
-from tkinter import filedialog, messagebox
+import traceback
+from tkinter import DoubleVar, filedialog, messagebox
 from typing import List, Tuple
 
 import cv2
@@ -16,8 +17,10 @@ class Mode:
     View: int = 0
     Eraser: int = 1
     Pen: int = 2
-    RemBg: int = 3
-    UndoBg: int = 4
+    RemFill: int = 3
+    UndoFill: int = 4
+    RemBg: int = 5
+    UndoBg: int = 6
 
 
 class ImageViewer:
@@ -128,6 +131,20 @@ class ImageViewer:
         )
         self.pen_button.pack(side=tk.LEFT, padx=5, pady=5)
 
+        self.remfill_button = tk.Button(
+            self.button_frame,
+            text="RemFill",
+            command=lambda: self.set_mode(Mode.RemFill),
+        )
+        self.remfill_button.pack(side=tk.LEFT, padx=5, pady=5)
+
+        self.undofill_button = tk.Button(
+            self.button_frame,
+            text="UndoFill",
+            command=lambda: self.set_mode(Mode.UndoFill),
+        )
+        self.undofill_button.pack(side=tk.LEFT, padx=5, pady=5)
+
         self.rembg_button = tk.Button(
             self.button_frame,
             text="RemBg",
@@ -141,6 +158,34 @@ class ImageViewer:
             command=lambda: self.set_mode(Mode.UndoBg),
         )
         self.undobg_button.pack(side=tk.LEFT, padx=5, pady=5)
+
+        self.pen_size = DoubleVar()
+        self.pen_size.set(30)
+        self.pen_size_slider = tk.Scale(
+            self.button_frame,
+            orient="horizontal",
+            showvalue=False,
+            from_=1,
+            to=50,
+            variable=self.pen_size,
+            background="gray",
+            state="disabled",
+        )
+        self.pen_size_slider.pack(side=tk.LEFT, padx=5, pady=5)
+
+        self.fill_threshold = DoubleVar()
+        self.fill_threshold.set(10)
+        self.fill_slider = tk.Scale(
+            self.button_frame,
+            orient="horizontal",
+            showvalue=False,
+            from_=1,
+            to=50,
+            variable=self.fill_threshold,
+            background="gray",
+            state="disabled",
+        )
+        self.fill_slider.pack(side=tk.LEFT, padx=5, pady=5)
 
         self.image_files = self.select_folder()
 
@@ -158,7 +203,11 @@ class ImageViewer:
         self.elaser_drag = False
         self.pen_drag = False
         self.selected_box = False
+        self.rem_fill_drag = False
+        self.undo_fill_drag = False
         self.selected_pre = []
+        self.mouse_pointer_size = 0
+        self.mouse_border = False
         self.clock = pygame.time.Clock()
 
     def select_folder(self) -> List[str]:
@@ -230,25 +279,49 @@ class ImageViewer:
         pos2 = self.get_image_pos(self.drag_start)
         trimed = self.trim(self.cv_image, pos1, pos2)
         if trimed.shape[0] > 0 and trimed.shape[1] > 0:
-            mask = remove(trimed)[:, :, 3] >= 150  # type: ignore
-            data = np.zeros_like(trimed)
-            data[mask] = trimed[mask]
-            self.cv_image = self.trim_back(data, pos1, pos2)
+            mask = remove(trimed)[:, :, 3] < 150  # type: ignore
+            trimed[mask] = np.array([0, 0, 0, 0])
+            self.cv_image = self.trim_back(trimed, pos1, pos2)
             self.render_image()
             self.render_scaled()
 
     def undo_bg(self, event: pygame.event.Event) -> None:
         pos1 = self.get_image_pos(event.pos)
         pos2 = self.get_image_pos(self.drag_start)
-        trimed = self.trim(self.cv_image_base, pos1, pos2)
+        trimed = self.trim(self.cv_image_base.copy(), pos1, pos2)
         if trimed.shape[0] > 0 and trimed.shape[1] > 0:
-            mask = remove(trimed, session=self.rembg_session)[:, :, 3] >= 150  # type: ignore
-            data = np.zeros_like(trimed)
-            data[mask] = trimed[mask]
-            mask = self.trim_back(data, pos1, pos2) > 0
+            mask = remove(trimed, session=self.rembg_session)[:, :, 3] < 150  # type: ignore
+            trimed[mask] = np.array([0, 0, 0, 255])
+            mask = self.trim_back(trimed, pos1, pos2)[:, :, 3] == 255
             self.cv_image[mask] = self.cv_image_base[mask]
             self.render_image()
             self.render_scaled()
+
+    def remove_flood_fill(self, pos: Tuple[int, int]) -> None:
+        value = cv2.cvtColor(self.cv_image.copy(), cv2.COLOR_BGRA2BGR)
+        h, w = value.shape[:2]
+        mask = np.zeros((h + 2, w + 2), np.uint8)
+        flag = 4 | cv2.FLOODFILL_MASK_ONLY | cv2.FLOODFILL_FIXED_RANGE
+        threshold = self.fill_slider.get()
+        cv2.floodFill(value, mask, pos, (0, 0, 0), (threshold,) * 3, (threshold,) * 3, flag)
+        mask = mask[1:-1, 1:-1]
+        self.cv_image[mask == 1] = np.array([0, 0, 0, 0])
+        self.render_image()
+        self.render_scaled()
+
+    def undo_flood_fill(self, pos: Tuple[int, int]) -> None:
+        value = cv2.cvtColor(self.cv_image_base.copy(), cv2.COLOR_BGRA2BGR)
+        h, w = value.shape[:2]
+        mask = np.zeros((h + 2, w + 2), np.uint8)
+        flag = 4 | cv2.FLOODFILL_MASK_ONLY | cv2.FLOODFILL_FIXED_RANGE
+        threshold = self.fill_slider.get()
+        cv2.floodFill(value, mask, pos, (0, 0, 0), (threshold,) * 3, (threshold,) * 3, flag)
+        mask = mask[1:-1, 1:-1]
+        mask = mask == 1
+        mask = np.stack([mask] * 4, axis=2)
+        self.cv_image[mask] = self.cv_image_base[mask]
+        self.render_image()
+        self.render_scaled()
 
     def add_border(self, value: MatLike) -> MatLike:
         x, y, w, h = cv2.boundingRect(cv2.cvtColor(value, cv2.COLOR_BGRA2GRAY))
@@ -321,7 +394,12 @@ class ImageViewer:
                 self.render_scaled()
                 self.next_frame()
                 self.include_image()
+                if self.auto_button.cget("relief") == tk.RAISED:
+                    break
                 self.next_image()
+            self.fps_label.config(text="FPS: 0", width=8)
+            self.auto_button.config(relief=tk.RAISED)
+        else:
             self.fps_label.config(text="FPS: 0", width=8)
             self.auto_button.config(relief=tk.RAISED)
 
@@ -351,15 +429,26 @@ class ImageViewer:
         surface.fill((255, 255, 255))
         self.screen.blit(surface, (min(pos1[0], pos2[0]), min(pos1[1], pos2[1])))
 
+    def render_mouse_border(self, pos: Tuple[int, int]) -> None:
+        # pos の x y に線を引く
+        surface = pygame.Surface((self.screen_size[0], self.screen_size[1]), pygame.SRCALPHA)
+        pygame.draw.line(surface, (255, 255, 255), (pos[0], 0), (pos[0], self.screen_size[1]), 1)
+        pygame.draw.line(surface, (255, 255, 255), (0, pos[1]), (self.screen_size[0], pos[1]), 1)
+        self.screen.blit(surface, (0, 0))
+
+    def render_pointer(self, pos: Tuple[int, int]) -> None:
+        size = self.mouse_pointer_size
+        surface = pygame.Surface((size, size), pygame.SRCALPHA)
+        surface.set_alpha(128)
+        pygame.draw.circle(surface, (255, 255, 255), (size / 2, size / 2), size / 2)
+        self.screen.blit(surface, (pos[0] - size / 2, pos[1] - size / 2))
+
     def render_musk(self, pos: list[Tuple[int, int]]) -> None:
-        size = self.get_pen_size() * 2 * self.scale
+        size = max(self.pen_size.get() / self.scale, 0.5) * self.scale * 2
         surface = pygame.Surface((size, size), pygame.SRCALPHA)
         pygame.draw.circle(surface, (255, 255, 255), (size / 2, size / 2), size / 2)
         for p in pos:
             self.screen.blit(surface, (p[0] - size / 2, p[1] - size / 2))
-
-    def get_pen_size(self) -> int:
-        return int(10 / self.scale)
 
     def pygame_loop(self) -> None:
         try:
@@ -369,14 +458,19 @@ class ImageViewer:
                 self.fps_label.config(text=f"FPS: {self.clock.get_fps():.2f}")
                 self.clock.tick(120)
         except Exception as e:
+            print(traceback.format_exc())
             print(e)
 
     def next_frame(self) -> None:
         self.screen.fill((30, 30, 30))
         self.screen.blit(self.scaled_image, self.image_rect)
         self.render_musk(self.selected_pre)
+        pos = pygame.mouse.get_pos()
         if self.selected_box:
-            self.render_box(self.drag_start, pygame.mouse.get_pos())
+            self.render_box(self.drag_start, pos)
+        if self.mouse_border:
+            self.render_mouse_border(pos)
+        self.render_pointer(pos)
         pygame.display.flip()
 
         self.root.update_idletasks()
@@ -444,20 +538,35 @@ class ImageViewer:
             self.view_button,
             self.eraser_button,
             self.pen_button,
+            self.remfill_button,
+            self.undofill_button,
             self.rembg_button,
             self.undobg_button,
         ]
+        self.mouse_border = False
+        self.pen_size_slider.config(state="disabled", background="gray")
+        self.fill_slider.config(state="disabled", background="gray")
         for button in self.button_list:
             button.config(relief=tk.RAISED)
         if mode == Mode.View:
             self.view_button.config(relief=tk.SUNKEN)
         elif mode == Mode.Eraser:
+            self.pen_size_slider.config(state="normal", background="white")
             self.eraser_button.config(relief=tk.SUNKEN)
         elif mode == Mode.Pen:
+            self.pen_size_slider.config(state="normal", background="white")
             self.pen_button.config(relief=tk.SUNKEN)
+        elif mode == Mode.RemFill:
+            self.fill_slider.config(state="normal", background="white")
+            self.remfill_button.config(relief=tk.SUNKEN)
+        elif mode == Mode.UndoFill:
+            self.fill_slider.config(state="normal", background="white")
+            self.undofill_button.config(relief=tk.SUNKEN)
         elif mode == Mode.RemBg:
+            self.mouse_border = True
             self.rembg_button.config(relief=tk.SUNKEN)
         elif mode == Mode.UndoBg:
+            self.mouse_border = True
             self.undobg_button.config(relief=tk.SUNKEN)
 
     def handle_events(self):
@@ -495,6 +604,18 @@ class ImageViewer:
                     self.cv_image[musk] = self.cv_image_base[musk]
                     self.render_image()
                     self.render_scaled()
+            elif self.mode == Mode.RemFill:
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    self.rem_fill_drag = True
+                elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                    self.rem_fill_drag = False
+                    self.remove_flood_fill(self.get_image_pos(event.pos))
+            elif self.mode == Mode.UndoFill:
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    self.undo_fill_drag = True
+                elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                    self.undo_fill_drag = False
+                    self.undo_flood_fill(self.get_image_pos(event.pos))
             elif self.mode == Mode.RemBg:
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     self.drag_start = event.pos
@@ -510,18 +631,24 @@ class ImageViewer:
                     self.selected_box = False
                     self.undo_bg(event)
 
-            if event.type == pygame.MOUSEWHEEL:
-                self.zoom_image(event)
             if event.type == pygame.MOUSEMOTION and self.dragging:
                 self.drag_image(event)
-            if event.type == pygame.MOUSEMOTION and self.elaser_drag:
+            size = int(max(self.pen_size.get() / self.scale, 0.5))
+            if self.elaser_drag:
                 self.selected_pre.append(event.pos)
                 pos = self.get_image_pos(event.pos)
-                cv2.circle(self.selected_mask, (pos[0], pos[1]), self.get_pen_size(), (255, 255, 255), -1)
-            if event.type == pygame.MOUSEMOTION and self.pen_drag:
+                cv2.circle(self.selected_mask, (pos[0], pos[1]), size, (255, 255, 255), -1)
+            if self.pen_drag:
                 self.selected_pre.append(event.pos)
                 pos = self.get_image_pos(event.pos)
-                cv2.circle(self.selected_mask, (pos[0], pos[1]), self.get_pen_size(), (255, 255, 255), -1)
+                cv2.circle(self.selected_mask, (pos[0], pos[1]), size, (255, 255, 255), -1)
+            if self.rem_fill_drag:
+                self.remove_flood_fill(self.get_image_pos(event.pos))
+            if self.undo_fill_drag:
+                self.undo_flood_fill(self.get_image_pos(event.pos))
+
+            if event.type == pygame.MOUSEWHEEL:
+                self.zoom_image(event)
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 2:
                 self.drag_start = event.pos
                 self.dragging = True
@@ -529,10 +656,20 @@ class ImageViewer:
                 self.dragging = False
             if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
                 self.set_background_view()
+        if self.mode == Mode.Eraser or self.mode == Mode.Pen:
+            self.mouse_pointer_size = max(self.pen_size.get() / self.scale, 0.5) * self.scale * 2
+        else:
+            self.mouse_pointer_size = 5
 
     def key_event(self, event: tk.Event) -> None:
         if event.keysym == "space":
             self.include_image()
+        elif event.keysym == "d" or event.keysym == "Right":
+            self.next_image()
+        elif event.keysym == "a" or event.keysym == "Left":
+            self.previous_image()
+        elif event.keysym == "z":
+            self.load_image(self.image_files[self.current_image % len(self.image_files)])
 
 
 if __name__ == "__main__":
