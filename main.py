@@ -130,7 +130,7 @@ class ImageViewer:
 
         self.rembg_button = tk.Button(
             self.button_frame,
-            text="RemGg",
+            text="RemBg",
             command=lambda: self.set_mode(Mode.RemBg),
         )
         self.rembg_button.pack(side=tk.LEFT, padx=5, pady=5)
