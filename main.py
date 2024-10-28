@@ -279,7 +279,7 @@ class ImageViewer:
         pos2 = self.get_image_pos(self.drag_start)
         trimed = self.trim(self.cv_image, pos1, pos2)
         if trimed.shape[0] > 0 and trimed.shape[1] > 0:
-            mask = remove(trimed)[:, :, 3] < 150  # type: ignore
+            mask = remove(trimed, session=self.rembg_session)[:, :, 3] < 150  # type: ignore
             trimed[mask] = np.array([0, 0, 0, 0])
             self.cv_image = self.trim_back(trimed, pos1, pos2)
             self.render_image()
@@ -291,7 +291,7 @@ class ImageViewer:
         trimed = self.trim(self.cv_image_base.copy(), pos1, pos2)
         if trimed.shape[0] > 0 and trimed.shape[1] > 0:
             mask = remove(trimed, session=self.rembg_session)[:, :, 3] < 150  # type: ignore
-            trimed[mask] = np.array([0, 0, 0, 255])
+            trimed[mask] = np.array([0, 0, 0, 0])
             mask = self.trim_back(trimed, pos1, pos2)[:, :, 3] == 255
             self.cv_image[mask] = self.cv_image_base[mask]
             self.render_image()
@@ -430,7 +430,6 @@ class ImageViewer:
         self.screen.blit(surface, (min(pos1[0], pos2[0]), min(pos1[1], pos2[1])))
 
     def render_mouse_border(self, pos: Tuple[int, int]) -> None:
-        # pos の x y に線を引く
         surface = pygame.Surface((self.screen_size[0], self.screen_size[1]), pygame.SRCALPHA)
         pygame.draw.line(surface, (255, 255, 255), (pos[0], 0), (pos[0], self.screen_size[1]), 1)
         pygame.draw.line(surface, (255, 255, 255), (0, pos[1]), (self.screen_size[0], pos[1]), 1)
@@ -528,8 +527,8 @@ class ImageViewer:
         self.scaled_image = pygame.transform.scale(self.image, self.image_rect.size)
 
     def get_image_pos(self, pos: Tuple[int, int]) -> Tuple[int, int]:
-        x = int((pos[0] - self.image_rect.x) / self.scale)
-        y = int((pos[1] - self.image_rect.y) / self.scale)
+        x = min(max(int((pos[0] - self.image_rect.x) / self.scale), 0), self.cv_image.shape[1] - 1)
+        y = min(max(int((pos[1] - self.image_rect.y) / self.scale), 0), self.cv_image.shape[0] - 1)
         return x, y
 
     def set_mode(self, mode: int):
