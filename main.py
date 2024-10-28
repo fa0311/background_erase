@@ -1,6 +1,6 @@
 import os
 import tkinter as tk
-from tkinter import filedialog
+from tkinter import filedialog, messagebox
 from typing import List, Tuple
 
 import cv2
@@ -164,7 +164,8 @@ class ImageViewer:
     def select_folder(self) -> List[str]:
         self.folder_path = filedialog.askdirectory(title="Select a folder")
         if not self.folder_path:
-            raise ValueError("No folder selected")
+            self.throw_error("No folder selected")
+
         files = [
             os.path.join(self.folder_path, f)
             for f in os.listdir(self.folder_path)
@@ -172,8 +173,12 @@ class ImageViewer:
             if f.lower().endswith((".png", ".jpg", ".jpeg", ".bmp", ".gif"))
         ]
         if not files:
-            raise ValueError("No image files in the folder")
+            self.throw_error("No image files in the folder")
         return files
+
+    def throw_error(self, message: str) -> None:
+        messagebox.showerror("Error", message)
+        raise ValueError(message)
 
     def drag_image(self, event: pygame.event.Event) -> None:
         self.image_rect.topleft = (
@@ -326,7 +331,13 @@ class ImageViewer:
 
         output_dir = os.path.join(os.path.dirname(image_path), output)
         os.makedirs(output_dir, exist_ok=True)
-        cv2.imwrite(os.path.join(output_dir, f"{image_name}.png"), self.cv_image)
+
+        result, n = cv2.imencode(image_ext, self.cv_image)
+        if not result:
+            self.throw_error("Failed to encode image")
+
+        with open(os.path.join(output_dir, f"{image_name}.png"), "wb") as f:
+            f.write(n.tobytes())
 
         for re in remove_path:
             remove_dir = os.path.join(os.path.dirname(image_path), re)
