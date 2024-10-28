@@ -22,28 +22,28 @@ python main.py
 
 ### Navigation
 
-- *Previous* Move to the previous image
-- *Next* Move to the next image
-- *Reload* Return to the state before saving
-- *Clear* Revert all background transparency
-- *Include* Save the transparent image to the Include folder
-- *Exclude* Save the transparent image to the Exclude folder
-- *Backgroud* Display the boundary line
-- *Auto* Automatically make all images' backgrounds transparent using U2Net
+- **Previous** Move to the previous image
+- **Next** Move to the next image
+- **Reload** Return to the state before saving
+- **Clear** Revert all background transparency
+- **Include** Save the transparent image to the Include folder
+- **Exclude** Save the transparent image to the Exclude folder
+- **Backgroud** Display the boundary line
+- **Auto** Automatically make all images' backgrounds transparent using U2Net
 
 ### Editing
 
-- *View* View mode
-- *Erase* Manually remove the background using an eraser
-- *Pen* Restore the removed background with a pen
-- *RemFill* Remove background using surrounding colors as reference
-- *UndoFill* Restore background using surrounding colors as reference
-- *RemBg* Remove the background using U2Net
-- *UndoBg* Restore the background removed by U2Net
+- **View** View mode
+- **Erase** Manually remove the background using an eraser
+- **Pen** Restore the removed background with a pen
+- **RemFill** Remove background using surrounding colors as reference
+- **UndoFill** Restore background using surrounding colors as reference
+- **RemBg** Remove the background using U2Net
+- **UndoBg** Restore the background removed by U2Net
 
 ## Shortcuts
 
-- *Space* Save the transparent image to the Include folder
-- *Left, A* Move to the previous image
-- *Right, D* Move to the next image
-- *Z* Return to the state before saving
+- **Space** Save the transparent image to the Include folder
+- **Left, A** Move to the previous image
+- **Right, D** Move to the next image
+- **Z** Return to the state before saving
