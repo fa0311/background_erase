@@ -4,7 +4,7 @@ This is a tool for making the background of a large number of images transparent
 It uses U2Net for background removal but also allows for manual adjustments.
 It is primarily used for creating AI training data.
 
-English | 日本語(README-ja.md)
+English | [日本語](README-ja.md)
 
 <img src="image/README/1730130814363.png" width="48%">
 <img src="image/README/1730131090907.png" width="48%">
