@@ -143,14 +143,15 @@ class ImageViewer:
         self.undobg_button.pack(side=tk.LEFT, padx=5, pady=5)
 
         self.image_files = self.select_folder()
-        if not self.image_files:
-            raise ValueError("No image files found in the selected folder")
 
         root.focus_force()
         self.current_image = 0
         self.update_index_label()
         self.set_mode(Mode.View)
         self.background_view = False
+
+        os.makedirs(os.path.join(self.folder_path, "include"), exist_ok=True)
+        os.makedirs(os.path.join(self.folder_path, "exclude"), exist_ok=True)
 
         self.load_image(self.image_files[self.current_image % len(self.image_files)])
         self.dragging = False
@@ -162,14 +163,17 @@ class ImageViewer:
 
     def select_folder(self) -> List[str]:
         self.folder_path = filedialog.askdirectory(title="Select a folder")
-        os.makedirs(os.path.join(self.folder_path, "include"), exist_ok=True)
-        os.makedirs(os.path.join(self.folder_path, "exclude"), exist_ok=True)
-        return [
+        if not self.folder_path:
+            raise ValueError("No folder selected")
+        files = [
             os.path.join(self.folder_path, f)
             for f in os.listdir(self.folder_path)
             if os.path.isfile(os.path.join(self.folder_path, f))
             if f.lower().endswith((".png", ".jpg", ".jpeg", ".bmp", ".gif"))
         ]
+        if not files:
+            raise ValueError("No image files in the folder")
+        return files
 
     def drag_image(self, event: pygame.event.Event) -> None:
         self.image_rect.topleft = (
@@ -301,8 +305,8 @@ class ImageViewer:
         self.render_scaled()
 
     def auto(self) -> None:
-        self.fps_label.config(text="Processing Auto")
         if self.auto_button.cget("relief") == tk.RAISED:
+            self.fps_label.config(text="Processing Auto", width=15)
             self.auto_button.config(relief=tk.SUNKEN)
             for _ in tqdm(self.image_files[self.current_image :]):
                 mask = remove(self.cv_image_base, session=self.rembg_session)[:, :, 3] >= 150  # type: ignore
@@ -313,6 +317,7 @@ class ImageViewer:
                 self.next_frame()
                 self.include_image()
                 self.next_image()
+            self.fps_label.config(text="FPS: 0", width=8)
             self.auto_button.config(relief=tk.RAISED)
 
     def image_dump(self, output: str, remove_path: list[str]) -> None:
@@ -369,7 +374,7 @@ class ImageViewer:
     def load_image(self, image_path: str) -> None:
         image_name, image_ext = os.path.splitext(os.path.basename(image_path))
         self.root.title(f"Background Eraser - {image_name}{image_ext}")
-        self.cv_image_base = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
+        self.cv_image_base = cv2.imdecode(np.fromfile(image_path, np.uint8), cv2.IMREAD_UNCHANGED)
         if self.cv_image_base.shape[2] == 3:
             self.cv_image_base = cv2.cvtColor(self.cv_image_base, cv2.COLOR_BGR2BGRA)
         files = [
