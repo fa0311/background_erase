@@ -398,7 +398,7 @@ class ImageViewer:
         for button, output in files:
             path = os.path.join(os.path.dirname(image_path), output.lower(), f"{image_name}.png")
             if os.path.exists(path):
-                self.cv_image = cv2.imread(path, cv2.IMREAD_UNCHANGED)
+                self.cv_image = cv2.imdecode(np.fromfile(path, np.uint8), cv2.IMREAD_UNCHANGED)
                 if self.cv_image.shape[2] == 3:
                     self.cv_image = cv2.cvtColor(self.cv_image, cv2.COLOR_BGR2BGRA)
                 button.config(text=f"{output}*")
