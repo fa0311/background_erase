@@ -32,7 +32,8 @@ class ImageViewer:
         self.cv_image: MatLike
         self.cv_image_base: MatLike
         self.selected_mask: MatLike
-        root.bind("<KeyPress>", self.key_event)
+        root.bind("<KeyPress>", self.key_press_event)
+        root.bind("<KeyRelease>", self.key_release_event)
 
         self.top_frame = tk.Frame(self.root)
         self.top_frame.pack(side=tk.TOP)
@@ -208,6 +209,7 @@ class ImageViewer:
         self.selected_pre = []
         self.mouse_pointer_size = 0
         self.mouse_border = False
+        self.enable_shift = False
         self.clock = pygame.time.Clock()
 
     def select_folder(self) -> List[str]:
@@ -345,12 +347,18 @@ class ImageViewer:
         return value
 
     def next_image(self) -> None:
-        self.current_image = (self.current_image + 1) % len(self.image_files)
+        if self.enable_shift:
+            self.current_image = (self.current_image + 10) % len(self.image_files)
+        else:
+            self.current_image = (self.current_image + 1) % len(self.image_files)
         self.move_image(self.current_image)
         self.update_index_label()
 
     def previous_image(self) -> None:
-        self.current_image = (self.current_image - 1) % len(self.image_files)
+        if self.enable_shift:
+            self.current_image = (self.current_image - 10) % len(self.image_files)
+        else:
+            self.current_image = (self.current_image - 1) % len(self.image_files)
         self.move_image(self.current_image)
         self.update_index_label()
 
@@ -653,9 +661,11 @@ class ImageViewer:
                 self.remove_flood_fill(self.get_image_pos(event.pos))
             if self.undo_fill_drag:
                 self.undo_flood_fill(self.get_image_pos(event.pos))
-
-            if event.type == pygame.MOUSEWHEEL:
+            if event.type == pygame.MOUSEWHEEL and not self.enable_shift:
                 self.zoom_image(event)
+            if event.type == pygame.MOUSEWHEEL and self.enable_shift:
+                if self.mode == Mode.Eraser or self.mode == Mode.Pen:
+                    self.pen_size.set(self.pen_size.get() + event.y)
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 2:
                 self.drag_start = event.pos
                 self.dragging = True
@@ -668,15 +678,22 @@ class ImageViewer:
         else:
             self.mouse_pointer_size = 5
 
-    def key_event(self, event: tk.Event) -> None:
-        if event.keysym == "space":
+    def key_press_event(self, event: tk.Event) -> None:
+        print(event)
+        if ["space"].count(event.keysym.lower()):
             self.include_image()
-        elif event.keysym == "d" or event.keysym == "Right":
+        elif ["d", "right"].count(event.keysym.lower()):
             self.next_image()
-        elif event.keysym == "a" or event.keysym == "Left":
+        elif ["a", "left"].count(event.keysym.lower()):
             self.previous_image()
-        elif event.keysym == "z":
+        elif ["z"].count(event.keysym.lower()):
             self.reload_image()
+        elif ["shift_l"].count(event.keysym.lower()):
+            self.enable_shift = True
+
+    def key_release_event(self, event: tk.Event) -> None:
+        if ["shift_l"].count(event.keysym.lower()):
+            self.enable_shift = False
 
 
 if __name__ == "__main__":
