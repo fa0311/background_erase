@@ -57,7 +57,7 @@ class ImageViewer:
         self.reload_button = tk.Button(
             self.top_frame,
             text="Reload",
-            command=lambda: self.load_image(self.image_files[self.current_image % len(self.image_files)]),
+            command=lambda: self.reload_image(),
         )
         self.reload_button.pack(side=tk.LEFT, padx=5, pady=5)
 
@@ -198,7 +198,7 @@ class ImageViewer:
         os.makedirs(os.path.join(self.folder_path, "include"), exist_ok=True)
         os.makedirs(os.path.join(self.folder_path, "exclude"), exist_ok=True)
 
-        self.load_image(self.image_files[self.current_image % len(self.image_files)])
+        self.move_image(self.current_image)
         self.dragging = False
         self.elaser_drag = False
         self.pen_drag = False
@@ -301,7 +301,7 @@ class ImageViewer:
         value = cv2.cvtColor(self.cv_image.copy(), cv2.COLOR_BGRA2BGR)
         h, w = value.shape[:2]
         mask = np.zeros((h + 2, w + 2), np.uint8)
-        flag = 4 | cv2.FLOODFILL_MASK_ONLY | cv2.FLOODFILL_FIXED_RANGE
+        flag = 8 | cv2.FLOODFILL_MASK_ONLY | cv2.FLOODFILL_FIXED_RANGE
         threshold = self.fill_slider.get()
         cv2.floodFill(value, mask, pos, (0, 0, 0), (threshold,) * 3, (threshold,) * 3, flag)
         mask = mask[1:-1, 1:-1]
@@ -313,7 +313,7 @@ class ImageViewer:
         value = cv2.cvtColor(self.cv_image_base.copy(), cv2.COLOR_BGRA2BGR)
         h, w = value.shape[:2]
         mask = np.zeros((h + 2, w + 2), np.uint8)
-        flag = 4 | cv2.FLOODFILL_MASK_ONLY | cv2.FLOODFILL_FIXED_RANGE
+        flag = 8 | cv2.FLOODFILL_MASK_ONLY | cv2.FLOODFILL_FIXED_RANGE
         threshold = self.fill_slider.get()
         cv2.floodFill(value, mask, pos, (0, 0, 0), (threshold,) * 3, (threshold,) * 3, flag)
         mask = mask[1:-1, 1:-1]
@@ -346,12 +346,12 @@ class ImageViewer:
 
     def next_image(self) -> None:
         self.current_image = (self.current_image + 1) % len(self.image_files)
-        self.load_image(self.image_files[self.current_image % len(self.image_files)])
+        self.move_image(self.current_image)
         self.update_index_label()
 
     def previous_image(self) -> None:
         self.current_image = (self.current_image - 1) % len(self.image_files)
-        self.load_image(self.image_files[self.current_image % len(self.image_files)])
+        self.move_image(self.current_image)
         self.update_index_label()
 
     def update_index_label(self) -> None:
@@ -498,7 +498,15 @@ class ImageViewer:
                 break
         else:
             self.cv_image = self.cv_image_base.copy()
+
+    def move_image(self, index: int):
+        self.load_image(self.image_files[index % len(self.image_files)])
         self.fit_to_screen()
+
+    def reload_image(self):
+        self.load_image(self.image_files[self.current_image % len(self.image_files)])
+        self.render_image()
+        self.render_scaled()
 
     def fit_to_screen(self) -> None:
         screen_w, screen_h = self.screen_size
@@ -668,7 +676,7 @@ class ImageViewer:
         elif event.keysym == "a" or event.keysym == "Left":
             self.previous_image()
         elif event.keysym == "z":
-            self.load_image(self.image_files[self.current_image % len(self.image_files)])
+            self.reload_image()
 
 
 if __name__ == "__main__":
