@@ -679,7 +679,6 @@ class ImageViewer:
             self.mouse_pointer_size = 5
 
     def key_press_event(self, event: tk.Event) -> None:
-        print(event)
         if ["space"].count(event.keysym.lower()):
             self.include_image()
         elif ["d", "right"].count(event.keysym.lower()):
