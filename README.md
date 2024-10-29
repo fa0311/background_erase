@@ -44,6 +44,9 @@ python main.py
 ## Shortcuts
 
 - **Space** Save the transparent image to the Include folder
-- **Left, A** Move to the previous image
-- **Right, D** Move to the next image
+- **Left, A** Move to the previous image (Hold down Shift to move 10 images)
+- **Right, D** Move to the next image  (Hold down Shift to move 10 images)
 - **Z** Return to the state before saving
+- **Mouse Wheel** Zoom in/out
+- **Mouse Wheel Drag** Move the image
+- **Ctrl + Mouse Wheel** Change the pen size
