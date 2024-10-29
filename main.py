@@ -418,7 +418,7 @@ class ImageViewer:
         output_dir = os.path.join(os.path.dirname(image_path), output)
         os.makedirs(output_dir, exist_ok=True)
 
-        result, n = cv2.imencode(image_ext, self.cv_image)
+        result, n = cv2.imencode(".png", self.cv_image)
         if not result:
             self.throw_error("Failed to encode image")
 
@@ -649,7 +649,7 @@ class ImageViewer:
             if event.type == pygame.MOUSEMOTION and self.dragging:
                 self.drag_image(event)
             size = int(max(self.pen_size.get() / self.scale, 0.5))
-            if self.elaser_drag:
+            if event.type == pygame.MOUSEMOTION and self.elaser_drag:
                 self.selected_pre.append(event.pos)
                 pos = self.get_image_pos(event.pos)
                 cv2.circle(self.selected_mask, (pos[0], pos[1]), size, (255, 255, 255), -1)
