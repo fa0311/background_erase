@@ -6,11 +6,38 @@ from typing import List, Tuple
 
 import cv2
 import numpy as np
+import onnxruntime as ort
 import pygame
 from cv2.typing import MatLike
 from rembg import new_session, remove
-from rembg.sessions.base import BaseSession
 from tqdm import tqdm
+
+MODEL_NAME_LIST = [
+    "u2net",
+    "isnet-general-use",
+    "sam",
+    "birefnet-general",
+    "birefnet-general-lite",
+    # "u2netp",
+    # "u2net_human_seg",
+    # "u2net_cloth_seg",
+    # "silueta",
+    # "isnet-anime",
+    # "birefnet-portrait",
+    # "birefnet-dis",
+    # "birefnet-hrsod",
+    # "birefnet-cod",
+    # "birefnet-massive",
+]
+
+
+PROVIDERS_LIST = [
+    "CUDAExecutionProvider",
+    "CPUExecutionProvider",
+    # "TensorrtExecutionProvider",
+    # "AzureExecutionProvider",
+    # "DirectMLExecutionProvider",
+]
 
 
 class Mode:
@@ -24,10 +51,10 @@ class Mode:
 
 
 class ImageViewer:
-    def __init__(self, root: tk.Tk, screen_size: Tuple[int, int], rembg_session: BaseSession) -> None:
+    def __init__(self, root: tk.Tk, screen_size: Tuple[int, int]) -> None:
         self.root = root
         self.screen_size = screen_size
-        self.rembg_session = rembg_session
+        self.rembg_session = new_session(model_name=MODEL_NAME_LIST[0], providers=PROVIDERS_LIST)
 
         self.cv_image: MatLike
         self.cv_image_base: MatLike
@@ -97,6 +124,17 @@ class ImageViewer:
         )
         self.auto_button.pack(side=tk.LEFT, padx=5, pady=5)
 
+        self.model_name_var = tk.StringVar()
+        self.model_name_var.set(MODEL_NAME_LIST[0])
+        self.model_name_select = tk.OptionMenu(
+            self.top_frame,
+            self.model_name_var,
+            *MODEL_NAME_LIST,
+            command=lambda _: self.reload_model(),
+        )
+        self.model_name_select.config(width=15, indicatoron=False)
+        self.model_name_select.pack(side=tk.LEFT, padx=5, pady=5)
+
         self.embed_pygame = tk.Frame(
             self.root,
             width=screen_size[0],
@@ -104,7 +142,6 @@ class ImageViewer:
         )
         self.embed_pygame.pack(side=tk.TOP)
         os.environ["SDL_WINDOWID"] = str(self.embed_pygame.winfo_id())
-        os.environ["SDL_VIDEODRIVER"] = "windib"
         pygame.display.init()
         self.screen = pygame.display.set_mode(screen_size)
 
@@ -411,6 +448,9 @@ class ImageViewer:
             self.fps_label.config(text="FPS: 0", width=8)
             self.auto_button.config(relief=tk.RAISED)
 
+    def reload_model(self) -> None:
+        self.rembg_session = new_session(model_name=self.model_name_var.get(), providers=PROVIDERS_LIST)
+
     def image_dump(self, output: str, remove_path: list[str]) -> None:
         image_path = self.image_files[self.current_image % len(self.image_files)]
         image_name, image_ext = os.path.splitext(os.path.basename(image_path))
@@ -696,7 +736,7 @@ class ImageViewer:
 
 
 if __name__ == "__main__":
-    rembg_session = new_session()
+    print(ort.get_available_providers())
     root = tk.Tk()
-    viewer = ImageViewer(root, screen_size=(800, 600), rembg_session=rembg_session)
+    viewer = ImageViewer(root, screen_size=(800, 600))
     viewer.pygame_loop()
