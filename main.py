@@ -449,6 +449,7 @@ class ImageViewer:
             self.auto_button.config(relief=tk.RAISED)
 
     def reload_model(self) -> None:
+        del self.rembg_session
         self.rembg_session = new_session(model_name=self.model_name_var.get(), providers=PROVIDERS_LIST)
 
     def image_dump(self, output: str, remove_path: list[str]) -> None:
