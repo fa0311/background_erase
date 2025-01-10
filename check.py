@@ -5,6 +5,8 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 
+AUTO_FIX = False
+
 if __name__ == "__main__":
     folder_path = filedialog.askdirectory(title="Select a folder")
     if not folder_path:
@@ -47,14 +49,26 @@ if __name__ == "__main__":
     for base_path in tqdm(original_files):
         filename = os.path.splitext(base_path)[0]
         if filename in include_files_set:
-            path = os.path.join(folder_path, "include", f"{filename}.png")
+            dir = "include"
         elif filename in exclude_files_set:
-            path = os.path.join(folder_path, "exclude", f"{filename}.png")
+            dir = "exclude"
         else:
-            raise SystemExit("Unknown file")
+            continue
+
+        path = os.path.join(folder_path, dir, f"{filename}.png")
 
         cv_image = cv2.imdecode(np.fromfile(path, np.uint8), cv2.IMREAD_UNCHANGED)
         cv_base_image = cv2.imdecode(np.fromfile(os.path.join(folder_path, base_path), np.uint8), cv2.IMREAD_UNCHANGED)
 
         if cv_image.shape[0] != cv_base_image.shape[0] or cv_image.shape[1] != cv_base_image.shape[1]:
             tqdm.write(f"size mismatch: {base_path}")
+
+            if AUTO_FIX:
+                if cv_image.shape[0] == cv_base_image.shape[1] and cv_image.shape[1] == cv_base_image.shape[0]:
+                    cv_image = cv2.rotate(cv_image, cv2.ROTATE_90_CLOCKWISE)
+                    result, n = cv2.imencode(".png", cv_image)
+                    with open(path, "wb") as f:
+                        f.write(n.tobytes())
+                    tqdm.write(f"fixed: {base_path}")
+                else:
+                    tqdm.write(f"skip: {base_path}")

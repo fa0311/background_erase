@@ -197,6 +197,20 @@ class ImageViewer:
         )
         self.undobg_button.pack(side=tk.LEFT, padx=5, pady=5)
 
+        self.rotate_button = tk.Button(
+            self.button_frame,
+            text="Rotate",
+            command=lambda: self.rotate_image(),
+        )
+        self.rotate_button.pack(side=tk.LEFT, padx=5, pady=5)
+
+        self.rotate_base_button = tk.Button(
+            self.button_frame,
+            text="Rotate Base",
+            command=lambda: self.rotate_base_image(),
+        )
+        self.rotate_base_button.pack(side=tk.LEFT, padx=5, pady=5)
+
         self.pen_size = DoubleVar()
         self.pen_size.set(30)
         self.pen_size_slider = tk.Scale(
@@ -230,6 +244,7 @@ class ImageViewer:
         root.focus_force()
         self.current_image = 0
         self.update_index_label()
+        self.mode = Mode.View
         self.set_mode(Mode.View)
         self.background_view = False
 
@@ -247,6 +262,7 @@ class ImageViewer:
         self.mouse_pointer_size = 0
         self.mouse_border = False
         self.enable_shift = False
+        self.change_base = False
         self.clock = pygame.time.Clock()
 
     def select_folder(self) -> List[str]:
@@ -417,6 +433,20 @@ class ImageViewer:
         self.include_button.config(text="Include")
         self.exclude_button.config(text="Exclude*")
 
+    def rotate_image(self) -> None:
+        if self.cv_image.shape[0] == self.cv_image.shape[1]:
+            self.cv_image = cv2.rotate(self.cv_image, cv2.ROTATE_90_CLOCKWISE)
+        else:
+            self.cv_image = cv2.rotate(self.cv_image, cv2.ROTATE_180)
+        self.render_image()
+        self.render_scaled()
+
+    def rotate_base_image(self) -> None:
+        self.cv_image = cv2.rotate(self.cv_image, cv2.ROTATE_90_CLOCKWISE)
+        self.cv_image_base = cv2.rotate(self.cv_image_base, cv2.ROTATE_90_CLOCKWISE)
+        self.fit_to_screen()
+        self.change_base = True
+
     def set_background_view(self) -> None:
         if self.background_view:
             self.background_view = False
@@ -471,6 +501,14 @@ class ImageViewer:
             remove_image = os.path.join(remove_dir, f"{image_name}.png")
             if os.path.exists(remove_image):
                 os.remove(remove_image)
+
+        if self.change_base:
+            result, n = cv2.imencode(os.path.splitext(image_path)[1], self.cv_image_base)
+            if not result:
+                self.throw_error("Failed to encode image")
+
+            with open(image_path, "wb") as f:
+                f.write(n.tobytes())
 
     def render_box(self, pos1: Tuple[int, int], pos2: Tuple[int, int]) -> None:
         surface = pygame.Surface((abs(pos1[0] - pos2[0]), abs(pos1[1] - pos2[1])))
@@ -527,6 +565,7 @@ class ImageViewer:
     def load_image(self, image_path: str) -> None:
         image_name, image_ext = os.path.splitext(os.path.basename(image_path))
         self.root.title(f"Background Eraser - {image_name}{image_ext}")
+        self.change_base = False
         self.cv_image_base = cv2.imdecode(np.fromfile(image_path, np.uint8), cv2.IMREAD_UNCHANGED)
         if self.cv_image_base.shape[2] == 3:
             self.cv_image_base = cv2.cvtColor(self.cv_image_base, cv2.COLOR_BGR2BGRA)
@@ -589,7 +628,6 @@ class ImageViewer:
         return x, y
 
     def set_mode(self, mode: int):
-        self.mode = mode
         self.button_list = [
             self.view_button,
             self.eraser_button,
@@ -599,11 +637,25 @@ class ImageViewer:
             self.rembg_button,
             self.undobg_button,
         ]
-        self.mouse_border = False
-        self.pen_size_slider.config(state="disabled", background="gray")
-        self.fill_slider.config(state="disabled", background="gray")
+
         for button in self.button_list:
             button.config(relief=tk.RAISED)
+
+        if self.mode == Mode.View:
+            pass
+        elif self.mode == Mode.Eraser:
+            self.pen_size_slider.config(state="disabled", background="gray")
+        elif self.mode == Mode.Pen:
+            self.pen_size_slider.config(state="disabled", background="gray")
+        elif self.mode == Mode.RemFill:
+            self.fill_slider.config(state="disabled", background="gray")
+        elif self.mode == Mode.UndoFill:
+            self.fill_slider.config(state="disabled", background="gray")
+        elif self.mode == Mode.RemBg:
+            self.mouse_border = False
+        elif self.mode == Mode.UndoBg:
+            self.mouse_border = False
+
         if mode == Mode.View:
             self.view_button.config(relief=tk.SUNKEN)
         elif mode == Mode.Eraser:
@@ -624,6 +676,8 @@ class ImageViewer:
         elif mode == Mode.UndoBg:
             self.mouse_border = True
             self.undobg_button.config(relief=tk.SUNKEN)
+
+        self.mode = mode
 
     def handle_events(self):
         for event in pygame.event.get():
