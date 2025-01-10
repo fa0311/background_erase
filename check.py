@@ -32,3 +32,6 @@ if __name__ == "__main__":
 
     for files in set(original_files) - (set(include_files) | set(exclude_files)):
         print(f"not found include/exclude image: {files}")
+
+    for files in set(include_files) & set(exclude_files):
+        print(f"found both include/exclude image: {files}")
