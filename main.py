@@ -258,7 +258,7 @@ class ImageViewer:
             os.path.join(self.folder_path, f)
             for f in os.listdir(self.folder_path)
             if os.path.isfile(os.path.join(self.folder_path, f))
-            if f.lower().endswith((".png", ".jpg", ".jpeg", ".bmp", ".gif"))
+            if f.lower().endswith((".png", ".jpg", ".jpeg"))
         ]
         if not files:
             self.throw_error("No image files in the folder")
