@@ -9,7 +9,7 @@ from watchdog.observers import Observer
 class MultiFolderSelectApp:
     def __init__(self, root, folder_paths):
         self.root = root
-        self.root.title("フォルダ選択アプリ")
+        self.root.title("Multi File Move")
 
         self.log_text = tk.Text(self.root, width=50, height=10)
         self.log_text.pack()
@@ -82,7 +82,7 @@ class FolderEventHandler(FileSystemEventHandler):
 
 
 if __name__ == "__main__":
-    folder_paths = filedialog.askdirectory(mustexist=True, title="フォルダを選択")
+    folder_paths = filedialog.askdirectory(mustexist=True, title="Select folders")
 
     root = tk.Tk()
     app = MultiFolderSelectApp(root, folder_paths)
